@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Uri;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.maxwai.nclientv3.api.InspectorV3;
 import com.maxwai.nclientv3.api.components.Tag;
@@ -36,8 +37,14 @@ public class Bookmark {
         this.uri = Uri.parse(url);
     }
 
+    @Nullable
+    private String getSearchQuery() {
+        String query = uri.getQueryParameter("query");
+        return query == null ? uri.getQueryParameter("q") : query;
+    }
+
     public InspectorV3 createInspector(Context context, InspectorV3.InspectorResponse response) {
-        String query = uri.getQueryParameter("q");
+        String query = getSearchQuery();
         SortType popular = SortType.findFromAddition(uri.getQueryParameter("sort"));
         if (requestType == ApiRequestType.FAVORITE)
             return InspectorV3.favoriteInspector(context, query, page, response);
@@ -61,8 +68,7 @@ public class Bookmark {
             return tagVal.getType().getSingle() + ": " + tagVal.getName();
         if (requestType == ApiRequestType.FAVORITE) return "Favorite";
         if (requestType == ApiRequestType.BYSEARCH)
-            //noinspection ConcatenationWithEmptyString
-            return "" + uri.getQueryParameter("q");
+            return getSearchQuery() == null ? "" : getSearchQuery();
         if (requestType == ApiRequestType.BYALL) return "Main page";
         return "WTF";
     }
