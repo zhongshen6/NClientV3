@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Uri;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.maxwai.nclientv3.api.InspectorV3;
 import com.maxwai.nclientv3.api.components.Tag;
@@ -36,6 +37,7 @@ public class Bookmark {
         this.uri = Uri.parse(url);
     }
 
+    @Nullable
     private String getSearchQuery() {
         String query = uri.getQueryParameter("query");
         return query == null ? uri.getQueryParameter("q") : query;
