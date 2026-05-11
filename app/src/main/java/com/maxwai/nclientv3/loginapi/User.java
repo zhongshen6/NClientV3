@@ -6,14 +6,13 @@ import android.util.JsonToken;
 
 import androidx.annotation.NonNull;
 
+import com.maxwai.nclientv3.api.ApiRateLimiter;
 import com.maxwai.nclientv3.settings.Global;
 import com.maxwai.nclientv3.settings.Login;
 import com.maxwai.nclientv3.utility.Utility;
 
 import java.io.IOException;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.Request;
 import okhttp3.Response;
 
@@ -47,19 +46,26 @@ public class User {
     }
 
     public static void createUser(@NonNull Context context, final CreateUser createUser) {
-        Global.getClient(context)
-            .newCall(new Request.Builder().url(Utility.getApiBaseUrl() + "user").build())
-            .enqueue(new Callback() {
+        ApiRateLimiter.getInstance()
+            .executeNowAsync(Global.getClient(context), new Request.Builder().url(Utility.getApiBaseUrl() + "user").build(), new ApiRateLimiter.ApiCallback() {
                 @Override
-                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                }
-
-                @Override
-                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                public void onSuccess(@NonNull Response response) throws IOException {
                     JsonReader json = new JsonReader(response.body().charStream());
                     User user = new User(json);
                     Login.updateUser(user);
                     if (createUser != null) createUser.onCreateUser(Login.getUser());
+                }
+
+                @Override
+                public void onRateLimited(@NonNull ApiRateLimiter.RateLimitedException e) {
+                }
+
+                @Override
+                public void onFailure(@NonNull IOException e) {
+                }
+
+                @Override
+                public void onCancelled() {
                 }
             });
     }

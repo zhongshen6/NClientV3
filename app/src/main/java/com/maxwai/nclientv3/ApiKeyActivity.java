@@ -16,6 +16,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.Toolbar;
 
 import com.google.android.material.button.MaterialButton;
+import com.maxwai.nclientv3.api.ApiRateLimiter;
 import com.maxwai.nclientv3.components.activities.GeneralActivity;
 import com.maxwai.nclientv3.settings.AuthStore;
 import com.maxwai.nclientv3.settings.Global;
@@ -25,8 +26,6 @@ import com.maxwai.nclientv3.utility.Utility;
 
 import java.io.IOException;
 
-import okhttp3.Call;
-import okhttp3.Callback;
 import okhttp3.Request;
 import okhttp3.Response;
 
@@ -132,9 +131,37 @@ public class ApiKeyActivity extends GeneralActivity {
             .url(Utility.getApiBaseUrl() + "favorites")
             .header("Authorization", "Key " + apiKey)
             .build();
-        Global.getClient(this).newCall(request).enqueue(new Callback() {
+        ApiRateLimiter.getInstance().executeNowAsync(Global.getClient(this), request, new ApiRateLimiter.ApiCallback() {
             @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+            public void onSuccess(@NonNull Response response) {
+                if (response.isSuccessful()) {
+                    AuthStore.saveApiKey(ApiKeyActivity.this, apiKey, true);
+                    Login.updateUser(null);
+                    runOnUiThread(() -> {
+                        setLoading(false);
+                        Toast.makeText(ApiKeyActivity.this, R.string.login_api_key_saved, Toast.LENGTH_SHORT).show();
+                        finish();
+                    });
+                    return;
+                }
+
+                LogUtility.w("API key validation rejected: " + response.code());
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    Toast.makeText(ApiKeyActivity.this, R.string.login_api_key_invalid, Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onRateLimited(@NonNull ApiRateLimiter.RateLimitedException e) {
+                runOnUiThread(() -> {
+                    setLoading(false);
+                    Toast.makeText(ApiKeyActivity.this, R.string.unable_to_connect_to_the_site, Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onFailure(@NonNull IOException e) {
                 LogUtility.e("API key validation failed", e);
                 runOnUiThread(() -> {
                     setLoading(false);
@@ -143,25 +170,8 @@ public class ApiKeyActivity extends GeneralActivity {
             }
 
             @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                try (response) {
-                    if (response.isSuccessful()) {
-                        AuthStore.saveApiKey(ApiKeyActivity.this, apiKey, true);
-                        Login.updateUser(null);
-                        runOnUiThread(() -> {
-                            setLoading(false);
-                            Toast.makeText(ApiKeyActivity.this, R.string.login_api_key_saved, Toast.LENGTH_SHORT).show();
-                            finish();
-                        });
-                        return;
-                    }
-
-                    LogUtility.w("API key validation rejected: " + response.code());
-                    runOnUiThread(() -> {
-                        setLoading(false);
-                        Toast.makeText(ApiKeyActivity.this, R.string.login_api_key_invalid, Toast.LENGTH_SHORT).show();
-                    });
-                }
+            public void onCancelled() {
+                runOnUiThread(() -> setLoading(false));
             }
         });
     }

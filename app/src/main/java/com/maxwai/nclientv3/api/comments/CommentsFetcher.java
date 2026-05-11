@@ -3,6 +3,7 @@ package com.maxwai.nclientv3.api.comments;
 import android.util.JsonReader;
 import android.util.JsonToken;
 
+import com.maxwai.nclientv3.api.ApiRateLimiter;
 import com.maxwai.nclientv3.CommentActivity;
 import com.maxwai.nclientv3.adapters.CommentAdapter;
 import com.maxwai.nclientv3.settings.Global;
@@ -48,7 +49,7 @@ public class CommentsFetcher extends Thread {
 
     private void populateComments() {
         String url = String.format(Locale.US, COMMENT_API_URL, id);
-        try (Response response = Objects.requireNonNull(Global.getClient()).newCall(new Request.Builder().url(url).build()).execute()) {
+        try (Response response = ApiRateLimiter.getInstance().executeNow(Objects.requireNonNull(Global.getClient()), new Request.Builder().url(url).build())) {
 
             ResponseBody body = response.body();
             try (JsonReader reader = new JsonReader(new InputStreamReader(body.byteStream()))) {

@@ -6,6 +6,7 @@ import android.util.JsonToken;
 
 import androidx.annotation.NonNull;
 
+import com.maxwai.nclientv3.api.ApiRateLimiter;
 import com.maxwai.nclientv3.api.components.Tag;
 import com.maxwai.nclientv3.api.enums.TagType;
 import com.maxwai.nclientv3.settings.Global;
@@ -52,7 +53,7 @@ public class LoadTags extends Thread {
         if (Login.getUser() == null) return;
         String url = Utility.getApiBaseUrl() + "blacklist";
         LogUtility.d(url);
-        try (Response response = Global.getClient(context).newCall(new Request.Builder().url(url).build()).execute()) {
+        try (Response response = ApiRateLimiter.getInstance().executeNow(Global.getClient(context), new Request.Builder().url(url).build())) {
             JsonReader json = new JsonReader(response.body().charStream());
             Login.clearOnlineTags();
             readTags(json);

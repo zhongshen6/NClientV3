@@ -326,10 +326,15 @@ public class InspectorV3 extends Thread implements Parcelable {
 
     public boolean createDocument() throws IOException {
         if (jsonResponse != null) return true;
-        try (Response response = Global.getClient(context.get()).newCall(new Request.Builder().url(url).build()).execute()) {
-            jsonResponse = response.body().string();
+        try (Response response = executeApiRequest(url)) {
+            jsonResponse = Objects.requireNonNull(response.body()).string();
             return response.code() == HttpURLConnection.HTTP_OK;
         }
+    }
+
+    @NonNull
+    private Response executeApiRequest(@NonNull String url) throws IOException {
+        return ApiRateLimiter.getInstance().executeNow(Global.getClient(context.get()), new Request.Builder().url(url).build());
     }
 
     public void parseDocument() throws IOException, InvalidResponseException {
@@ -394,8 +399,8 @@ public class InspectorV3 extends Thread implements Parcelable {
         if (!v2.has("title") && v2.has("id")) {
             int galleryId = v2.getInt("id");
             String detailUrl = Utility.getBaseUrl() + "api/v2/galleries/" + galleryId + "?include=related,favorite";
-            try (Response resp = Global.getClient(context.get()).newCall(new Request.Builder().url(detailUrl).build()).execute()) {
-                String body = resp.body().string();
+            try (Response resp = executeApiRequest(detailUrl)) {
+                String body = Objects.requireNonNull(resp.body()).string();
                 if (resp.code() != HttpURLConnection.HTTP_OK) return;
                 v2 = new JSONObject(body);
             }
