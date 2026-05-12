@@ -12,7 +12,6 @@ import android.util.JsonToken;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.maxwai.nclientv3.api.ApiRateLimiter;
 import com.maxwai.nclientv3.api.enums.ImageType;
 import com.maxwai.nclientv3.api.enums.SpecialTagIds;
 import com.maxwai.nclientv3.api.enums.TitleType;
@@ -373,7 +372,7 @@ public class GalleryData implements Parcelable {
         Thread updateThread = new Thread(() -> {
             // Old entry, needs to be updated
             String detailUrl = Utility.getBaseUrl() + "api/v2/galleries/" + id;
-            try (Response resp = ApiRateLimiter.getInstance().executeNow(Global.getClient(Objects.requireNonNull(context)), new Request.Builder().url(detailUrl).build())) {
+            try (Response resp = Global.getClient(Objects.requireNonNull(context)).newCall(new Request.Builder().url(detailUrl).build()).execute()) {
                 String body = resp.body().string();
                 if (resp.code() == HttpURLConnection.HTTP_OK) {
                     JSONObject v2 = new JSONObject(body);
