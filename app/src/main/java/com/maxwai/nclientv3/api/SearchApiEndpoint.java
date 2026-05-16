@@ -1,7 +1,6 @@
 package com.maxwai.nclientv3.api;
 
 import android.content.Context;
-import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -10,20 +9,20 @@ import com.maxwai.nclientv3.api.components.Ranges;
 import com.maxwai.nclientv3.api.components.Tag;
 import com.maxwai.nclientv3.api.enums.SortType;
 import com.maxwai.nclientv3.api.enums.TagStatus;
-import com.maxwai.nclientv3.utility.LogUtility;
-import com.maxwai.nclientv3.utility.Utility;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.Charset;
 import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
 import okhttp3.Response;
 
 public class SearchApiEndpoint {
+    private static final String PARAMETER_QUERY = "query";
+    private static final String PARAMETER_PAGE = "page";
+    private static final String PARAMETER_SORT = "sort";
+
     @NonNull
     private final ApiRateLimiter rateLimiter;
 
@@ -35,45 +34,45 @@ public class SearchApiEndpoint {
     public Response execute(@NonNull Context context, @NonNull OkHttpClient client, @Nullable String query,
                             @Nullable Collection<Tag> tags, @Nullable Ranges ranges, int page,
                             @Nullable SortType sortType) throws IOException, ApiRateLimiter.RateLimitException {
-        return rateLimiter.execute(context, client, buildRequest(query, tags, ranges, page, sortType));
-    }
-
-    @NonNull
-    public Request buildRequest(@Nullable String query, @Nullable Collection<Tag> tags, @Nullable Ranges ranges,
-                                int page, @Nullable SortType sortType) {
-        return new Request.Builder().url(buildUrl(query, tags, ranges, page, sortType)).build();
+        return rateLimiter.execute(context, client, buildParameters(query, tags, ranges, page, sortType));
     }
 
     @NonNull
     public String buildUrl(@Nullable String query, @Nullable Collection<Tag> tags, @Nullable Ranges ranges,
                            int page, @Nullable SortType sortType) {
-        StringBuilder builder = new StringBuilder(Utility.getBaseUrl()).append("api/v2/search?query=").append(encode(query));
-        if (tags != null) {
-            for (Tag tag : tags) {
-                if (builder.toString().contains(tag.toQueryTag(TagStatus.ACCEPTED))) continue;
-                builder.append('+').append(encode(tag.toQueryTag()));
-            }
-        }
-        if (ranges != null) builder.append('+').append(ranges.toQuery());
-        builder.append("&page=").append(page);
-        if (sortType != null && sortType.getUrlAddition() != null) {
-            builder.append("&sort=").append(sortType.getUrlAddition());
-        }
-        return builder.toString().replace(' ', '+');
+        return rateLimiter.buildUrl(buildParameters(query, tags, ranges, page, sortType));
     }
 
     @NonNull
-    private String encode(@Nullable String value) {
-        if (value == null) return "";
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return URLEncoder.encode(value, Charset.defaultCharset());
+    public Map<String, String> buildParameters(@Nullable String query, @Nullable Collection<Tag> tags,
+                                               @Nullable Ranges ranges, int page, @Nullable SortType sortType) {
+        Map<String, String> parameters = new LinkedHashMap<>();
+        parameters.put(PARAMETER_QUERY, buildSearchQuery(query, tags, ranges));
+        parameters.put(PARAMETER_PAGE, Integer.toString(page));
+        if (sortType != null && sortType.getUrlAddition() != null) {
+            parameters.put(PARAMETER_SORT, sortType.getUrlAddition());
         }
-        try {
-            //noinspection CharsetObjectCanBeUsed
-            return URLEncoder.encode(value, Charset.defaultCharset().name());
-        } catch (UnsupportedEncodingException e) {
-            LogUtility.wtf("This should not happen since we used the default charset", e);
-            return value;
+        return parameters;
+    }
+
+    @NonNull
+    private String buildSearchQuery(@Nullable String query, @Nullable Collection<Tag> tags, @Nullable Ranges ranges) {
+        StringBuilder builder = new StringBuilder(query == null ? "" : query);
+        if (tags != null) {
+            for (Tag tag : tags) {
+                if (builder.toString().contains(tag.toQueryTag(TagStatus.ACCEPTED))) continue;
+                appendSearchToken(builder, tag.toQueryTag());
+            }
         }
+        if (ranges != null) {
+            appendSearchToken(builder, ranges.toQuery());
+        }
+        return builder.toString();
+    }
+
+    private void appendSearchToken(@NonNull StringBuilder builder, @Nullable String token) {
+        if (token == null || token.isEmpty()) return;
+        if (builder.length() > 0) builder.append(' ');
+        builder.append(token);
     }
 }

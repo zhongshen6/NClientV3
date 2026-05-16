@@ -1,6 +1,7 @@
 package com.maxwai.nclientv3.api;
 
 import android.content.Context;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -237,7 +238,8 @@ public class InspectorV3 extends Thread implements Parcelable {
     public String getSearchTitle() {
         //triggered only when in searchMode
         if (!query.isEmpty()) return query;
-        return url.replace(Utility.getBaseUrl() + "api/v2/search?query=", "").replace('+', ' ');
+        String searchQuery = Uri.parse(url).getQueryParameter("query");
+        return searchQuery == null ? "" : searchQuery;
     }
 
     public void initialize(Context context, InspectorResponse response) {

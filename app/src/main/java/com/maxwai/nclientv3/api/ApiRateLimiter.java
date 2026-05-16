@@ -3,21 +3,33 @@ package com.maxwai.nclientv3.api;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.maxwai.nclientv3.settings.AuthStore;
 import com.maxwai.nclientv3.utility.LogUtility;
+import com.maxwai.nclientv3.utility.Utility;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.Date;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class ApiRateLimiter {
+    private static final int HTTP_TOO_MANY_REQUESTS = 429;
+    public static final Consumer<Response> CLOSE_RESPONSE_CALLBACK = Response::close;
+    public static final Consumer<IOException> LOG_FAILURE_CALLBACK = e -> LogUtility.e(e.getLocalizedMessage(), e);
+    public static final Runnable EMPTY_CANCELLED_CALLBACK = () -> {
+    };
+
     @NonNull
     private final Object lock = new Object();
     @NonNull
@@ -29,6 +41,8 @@ public class ApiRateLimiter {
     private final int unauthenticatedRequestLimit;
     private final int authenticatedRequestLimit;
     private final long windowMs;
+    @Nullable
+    private Date retryAfterUntil;
 
     ApiRateLimiter(@NonNull String method, @NonNull String path, int unauthenticatedRequestLimit,
                    int authenticatedRequestLimit, long windowMs) {
@@ -40,37 +54,44 @@ public class ApiRateLimiter {
     }
 
     @NonNull
-    public Response execute(@NonNull Context context, @NonNull OkHttpClient client, @NonNull Request request)
+    public Response execute(@NonNull Context context, @NonNull OkHttpClient client,
+                            @NonNull Map<String, String> parameters)
         throws IOException, RateLimitException {
-        return execute(context, client, request, ApiLimitConstants.API_RATE_LIMIT_FULL_QUOTA);
+        return execute(context, client, parameters, null);
     }
 
     @NonNull
-    public Response execute(@NonNull Context context, @NonNull OkHttpClient client, @NonNull Request request,
-                            double quotaFactor) throws IOException, RateLimitException {
-        RequestTimestamp timestamp = reserveRequest(context, quotaFactor);
+    public Response execute(@NonNull Context context, @NonNull OkHttpClient client,
+                            @NonNull Map<String, String> parameters, @Nullable RequestBody body)
+        throws IOException, RateLimitException {
+        Request request = buildRequest(parameters, body);
+        RequestTimestamp timestamp = reserveRequest(context);
         try {
             Response response = client.newCall(request).execute();
-            if (response.code() == ApiLimitConstants.API_RATE_LIMIT_HTTP_STATUS) {
+            if (response.code() == HTTP_TOO_MANY_REQUESTS) {
                 removeRequest(timestamp);
-                long retryAfterMs = getRetryAfterMs(response);
+                long retryAfterMs = getLocalRetryAfterMs();
+                setRetryAfterUntil(retryAfterMs);
                 response.close();
                 throw new RateLimitException(retryAfterMs);
             }
             return response;
         } catch (IOException e) {
+            removeRequest(timestamp);
             throw e;
         }
     }
 
     @NonNull
-    public Call executeAsync(@NonNull Context context, @NonNull OkHttpClient client, @NonNull Request request,
-                             double quotaFactor, @NonNull Consumer<Response> onSuccess,
+    public Call executeAsync(@NonNull Context context, @NonNull OkHttpClient client,
+                             @NonNull Map<String, String> parameters, @Nullable RequestBody body,
+                             @NonNull Consumer<Response> onSuccess,
                              @NonNull Consumer<RateLimitException> onRateLimited,
                              @NonNull Consumer<IOException> onFailure, @NonNull Runnable onCancelled) {
+        Request request = buildRequest(parameters, body);
         RequestTimestamp timestamp;
         try {
-            timestamp = reserveRequest(context, quotaFactor);
+            timestamp = reserveRequest(context);
         } catch (RateLimitException e) {
             Call call = client.newCall(request);
             call.cancel();
@@ -82,15 +103,18 @@ public class ApiRateLimiter {
         call.enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                removeRequest(timestamp);
                 if (call.isCanceled()) onCancelled.run();
                 else onFailure.accept(e);
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
-                if (response.code() == ApiLimitConstants.API_RATE_LIMIT_HTTP_STATUS) {
+                if (response.code() == HTTP_TOO_MANY_REQUESTS) {
                     removeRequest(timestamp);
-                    onRateLimited.accept(new RateLimitException(getRetryAfterMs(response)));
+                    long retryAfterMs = getLocalRetryAfterMs();
+                    setRetryAfterUntil(retryAfterMs);
+                    onRateLimited.accept(new RateLimitException(retryAfterMs));
                     response.close();
                     return;
                 }
@@ -101,32 +125,40 @@ public class ApiRateLimiter {
     }
 
     @NonNull
-    public String getMethod() {
-        return method;
+    public Request buildRequest(@NonNull Map<String, String> parameters, @Nullable RequestBody body) {
+        return new Request.Builder().url(buildUrl(parameters)).method(method, body).build();
     }
 
     @NonNull
-    public String getPath() {
-        return path;
+    public String buildUrl(@NonNull Map<String, String> parameters) {
+        HttpUrl.Builder builder = HttpUrl.get(Utility.getBaseUrl()).newBuilder();
+        String normalizedPath = path.startsWith("/") ? path.substring(1) : path;
+        builder.addPathSegments(normalizedPath);
+        for (Map.Entry<String, String> parameter : parameters.entrySet()) {
+            builder.addQueryParameter(parameter.getKey(), parameter.getValue());
+        }
+        return builder.build().toString();
     }
 
-    private RequestTimestamp reserveRequest(@NonNull Context context, double quotaFactor) throws RateLimitException {
+    private RequestTimestamp reserveRequest(@NonNull Context context) throws RateLimitException {
         synchronized (lock) {
+            Date now = new Date();
+            if (retryAfterUntil != null) {
+                if (retryAfterUntil.after(now)) {
+                    throw new RateLimitException(retryAfterUntil.getTime() - now.getTime());
+                }
+                retryAfterUntil = null;
+            }
+
             cleanWindowLocked();
             int requestLimit = AuthStore.hasValidApiKey(context) ? authenticatedRequestLimit : unauthenticatedRequestLimit;
-            int effectiveLimit = getEffectiveLimit(requestLimit, quotaFactor);
-            if (recentRequests.size() >= effectiveLimit) {
+            if (recentRequests.size() >= requestLimit) {
                 throw new RateLimitException(getRetryAfterMsLocked());
             }
             RequestTimestamp timestamp = new RequestTimestamp(System.currentTimeMillis());
             recentRequests.addLast(timestamp);
             return timestamp;
         }
-    }
-
-    private int getEffectiveLimit(int requestLimit, double quotaFactor) {
-        double normalizedFactor = Math.max(0, Math.min(1, quotaFactor));
-        return Math.max(1, (int) Math.floor(requestLimit * normalizedFactor));
     }
 
     private void removeRequest(@NonNull RequestTimestamp timestamp) {
@@ -145,20 +177,20 @@ public class ApiRateLimiter {
     private long getRetryAfterMsLocked() {
         cleanWindowLocked();
         RequestTimestamp firstRequest = recentRequests.peekFirst();
-        if (firstRequest == null) return ApiLimitConstants.API_RATE_LIMIT_DEFAULT_RETRY_AFTER_MS;
+        if (firstRequest == null) return windowMs;
         return Math.max(0, firstRequest.time + windowMs - System.currentTimeMillis());
     }
 
-    private long getRetryAfterMs(@NonNull Response response) {
-        String retryAfter = response.header("Retry-After");
-        if (retryAfter != null) {
-            try {
-                return Math.max(0, Long.parseLong(retryAfter) * ApiLimitConstants.API_RATE_LIMIT_RETRY_AFTER_SECONDS_MS);
-            } catch (NumberFormatException e) {
-                LogUtility.d("Could not parse Retry-After header: " + retryAfter);
-            }
+    private void setRetryAfterUntil(long retryAfterMs) {
+        synchronized (lock) {
+            retryAfterUntil = new Date(System.currentTimeMillis() + retryAfterMs);
         }
-        return ApiLimitConstants.API_RATE_LIMIT_DEFAULT_RETRY_AFTER_MS;
+    }
+
+    private long getLocalRetryAfterMs() {
+        synchronized (lock) {
+            return getRetryAfterMsLocked();
+        }
     }
 
     public static class RateLimitException extends Exception {
@@ -181,5 +213,4 @@ public class ApiRateLimiter {
             this.time = time;
         }
     }
-
 }
