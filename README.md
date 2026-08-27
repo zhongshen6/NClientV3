@@ -77,11 +77,11 @@ If your desired language is missing, write an issue, the language will be added.
 
 ## Star History
 
-<a href="https://www.star-history.com/#maxwai/NClientV3&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=maxwai%2FNClientV3&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=maxwai/NClientV3&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=maxwai/NClientV3&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=maxwai/NClientV3&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=maxwai/NClientV3&type=date&theme=dark&legend=top-left&sealed_token=migTu9jM4dpLMR0uQpFgyLNFTnt5qdYCOyoruWdAajo2DIRDQMJ3ySI0dtYXNSIcAFSGve0U-m31Q3lyd9_4a5PwQEmHcoMFv5fP8zeJ4xSa-o_UBCrX_xZmBqp732tyqpBW48shykrKN1OdZZbmD061ohmh_rp4qQiOeOR5HcvVFlNkSyuo6Zf3_LFl" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=maxwai/NClientV3&type=date&legend=top-left&sealed_token=migTu9jM4dpLMR0uQpFgyLNFTnt5qdYCOyoruWdAajo2DIRDQMJ3ySI0dtYXNSIcAFSGve0U-m31Q3lyd9_4a5PwQEmHcoMFv5fP8zeJ4xSa-o_UBCrX_xZmBqp732tyqpBW48shykrKN1OdZZbmD061ohmh_rp4qQiOeOR5HcvVFlNkSyuo6Zf3_LFl" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=maxwai/NClientV3&type=date&legend=top-left&sealed_token=migTu9jM4dpLMR0uQpFgyLNFTnt5qdYCOyoruWdAajo2DIRDQMJ3ySI0dtYXNSIcAFSGve0U-m31Q3lyd9_4a5PwQEmHcoMFv5fP8zeJ4xSa-o_UBCrX_xZmBqp732tyqpBW48shykrKN1OdZZbmD061ohmh_rp4qQiOeOR5HcvVFlNkSyuo6Zf3_LFl" />
  </picture>
 </a>
 
